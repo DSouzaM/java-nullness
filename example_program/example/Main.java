@@ -5,7 +5,9 @@ public class Main {
     public static void main(String[] args) throws Exception {
         Main m = new Main("foo");
         m.bar("a");
-        m.bar(null);
+        try {
+            m.bar(null);
+        } catch (RuntimeException re) {}
         String s = m.buz("blah", 4.2d, "");
         m.method(3);
         System.out.println("Done!");
@@ -17,14 +19,14 @@ public class Main {
 
     String bar(String x) throws Exception {
         if (x == null) {
-            return name;
+            throw new RuntimeException("oof");
         } else {
             return null;
         }
     }
 
     String buz(String x, double z, String y) {
-        return null;
+        return x;
     }
 
     String method(int y) {

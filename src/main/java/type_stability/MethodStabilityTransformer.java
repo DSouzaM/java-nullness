@@ -126,10 +126,10 @@ public class MethodStabilityTransformer {
         epilogue.add(new VarInsnNode(Opcodes.ALOAD, dataPointVarIndex)); // rv -> rv -> datapoint
         epilogue.add(new InsnNode(Opcodes.SWAP)); // rv -> datapoint -> rv
         epilogue.add(new MethodInsnNode(
-                Opcodes.INVOKEVIRTUAL,
-                Type.getInternalName(NullnessDataPoint.class),
-                "completeReturn",
-                Type.getMethodDescriptor(Type.VOID_TYPE, Type.getType(Object.class)),
+                Opcodes.INVOKESTATIC,
+                Type.getInternalName(NullnessLogger.class),
+                "logReturn",
+                Type.getMethodDescriptor(Type.VOID_TYPE, Type.getType(NullnessDataPoint.class), Type.getType(Object.class)),
                 false
         )); // rv
         return epilogue;
@@ -137,14 +137,12 @@ public class MethodStabilityTransformer {
 
     InsnList generateThrowEpilogue(int dataPointVarIndex) {
         InsnList epilogue = new InsnList();
-        epilogue.add(new InsnNode(Opcodes.DUP)); // exn -> exn
-        epilogue.add(new VarInsnNode(Opcodes.ALOAD, dataPointVarIndex)); // exn -> exn -> datapoint
-        epilogue.add(new InsnNode(Opcodes.SWAP)); // exn -> datapoint -> exn
+        epilogue.add(new VarInsnNode(Opcodes.ALOAD, dataPointVarIndex)); // exn -> datapoint
         epilogue.add(new MethodInsnNode(
-                Opcodes.INVOKEVIRTUAL,
-                Type.getInternalName(NullnessDataPoint.class),
-                "completeThrow",
-                Type.getMethodDescriptor(Type.VOID_TYPE, Type.getType(Exception.class)),
+                Opcodes.INVOKESTATIC,
+                Type.getInternalName(NullnessLogger.class),
+                "logThrow",
+                Type.getMethodDescriptor(Type.VOID_TYPE, Type.getType(NullnessDataPoint.class)),
                 false
         )); // exn
         return epilogue;

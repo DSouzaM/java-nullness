@@ -4,20 +4,25 @@ import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.tree.ClassNode;
 
+import java.io.IOException;
 import java.lang.instrument.*;
 import java.security.ProtectionDomain;
 
 
 public class TypeStabilityAgent {
-    public static void premain(String agentArgs, Instrumentation inst) {
+    public static void premain(String agentArgs, Instrumentation inst) throws IOException {
         String prefix = null;
+        String logFile = null;
         if (agentArgs != null) {
             String[] args = agentArgs.split(" ");
-            if (args.length > 1) {
-                throw new IllegalArgumentException("Agent takes at most one argument; " + args.length + " found.");
+            if (args.length > 2) {
+                throw new IllegalArgumentException(
+                        "Agent expects at most two arguments: the package prefix to instrument and a log file name.");
             }
-            prefix = args.length == 1 ? args[0] : null;
+            prefix = args.length > 0 ? args[0] : null;
+            logFile = args.length == 2 ? args[1] : null;
         }
+        NullnessLogger.initialize(logFile);
         inst.addTransformer(new TypeStabilityTransformer(prefix));
     }
 }

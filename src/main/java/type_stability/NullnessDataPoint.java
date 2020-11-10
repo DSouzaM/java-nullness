@@ -8,7 +8,7 @@ public class NullnessDataPoint {
 
 
     public NullnessDataPoint(String className, String methodName, Object[] parameters) {
-        System.out.println("type_stability.NullnessDataPoint constructor called with " + parameters.length + " parameters");
+//        System.out.println("type_stability.NullnessDataPoint constructor called with " + parameters.length + " parameters");
         this.className = className;
         this.methodName = methodName;
 
@@ -23,14 +23,5 @@ public class NullnessDataPoint {
             this.parameters <<= 1;
             this.parameters += (parameter == null) ? 0 : 1;
         }
-    }
-
-    public void completeReturn(Object result) {
-        String res = result == null ? "null" : "non-null";
-        System.out.println(className + "::" + methodName + " with bitmap " + parameters + " returned " + res);
-    }
-
-    public void completeThrow(Exception e) {
-        System.out.println(className + "::" + methodName + " with bitmap " + parameters + " threw exception " + e.getClass().getName());
     }
 }
