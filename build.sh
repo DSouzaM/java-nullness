@@ -1,10 +1,9 @@
 #!/bin/zsh
 
-javac -d out -cp "lib/*" src/**/*.java
+mvn package
+
+javac -d out -cp src/example/**/*.java
 
 pushd out
-
-jar cvfm ../TypeStabilityAgent.jar ../manifest.txt *.class
 jar cvf ../ExampleProgram.jar example/**/*.class
-
 popd

@@ -1,3 +1,0 @@
-Premain-Class: TypeStabilityAgent
-Can-Redefine-Classes: true
-Can-Retransform-Classes: true

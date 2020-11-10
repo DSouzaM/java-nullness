@@ -1,3 +1,5 @@
+package type_stability;
+
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
 import org.objectweb.asm.tree.*;
@@ -71,7 +73,7 @@ public class MethodStabilityTransformer {
         return Arrays.stream(methodType.getArgumentTypes()).anyMatch(this::isNullable);
     }
 
-    // Create a NullnessDataPoint and store it in the variable at index dataPointVarIndex
+    // Create a type_stability.NullnessDataPoint and store it in the variable at index dataPointVarIndex
     InsnList generatePrologue(String className, String methodName, Type methodType, int dataPointVarIndex) {
         Constructor<?> ctor = NullnessDataPoint.class.getConstructors()[0]; // Assumption: only one constructor
         Type dataPointType = Type.getType(NullnessDataPoint.class);

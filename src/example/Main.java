@@ -8,6 +8,7 @@ public class Main {
         m.bar(null);
         String s = m.buz("blah", 4.2d, "");
         m.method(3);
+        System.out.println("Done!");
     }
 
     Main(String name) {
