@@ -2,8 +2,7 @@
 
 mvn package
 
-javac -d out -cp src/example/**/*.java
-
-pushd out
-jar cvf ../ExampleProgram.jar example/**/*.class
+pushd src/example
+javac -d out -cp **/*.java
+jar cvf out/ExampleProgram.jar out/**/*.class
 popd
