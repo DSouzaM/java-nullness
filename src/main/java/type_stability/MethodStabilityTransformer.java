@@ -3,7 +3,6 @@ package type_stability;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
 import org.objectweb.asm.tree.*;
-import org.objectweb.asm.commons.*;
 
 import java.lang.reflect.Constructor;
 import java.util.Arrays;
@@ -28,24 +27,15 @@ public class MethodStabilityTransformer {
         LOGGER.info("Transforming " + mn.name + " with descriptor " + mn.desc + ".");
         boolean isStatic = (mn.access & Opcodes.ACC_STATIC) != 0;
 
-
         // Create a local variable to store parameter data until method exit
-        LocalVariablesSorter lvs = new LocalVariablesSorter(mn.access, mn.desc, null);
+        // note: This is hacky. Normally you'd use a LocalVariablesSorter, but I don't think it fits the Tree API very well.
         Type varType = Type.getType(NullnessDataPoint.class);
-        int dataPointVarIndex = lvs.newLocal(varType);
-        LabelNode scopeStart = new LabelNode();
-        LabelNode scopeEnd = new LabelNode();
-        String DATAPOINT_NAME = "NULLNESS_DATAPOINT";
-        mn.localVariables.add(new LocalVariableNode(
-                DATAPOINT_NAME, varType.getDescriptor(), null,
-                scopeStart, scopeEnd, dataPointVarIndex
-        ));
-        mn.instructions.insert(scopeStart);
-        mn.instructions.add(scopeEnd);
+        int dataPointVarIndex = mn.maxLocals;
+        mn.maxLocals += varType.getSize();
 
         // Store parameters' nullness information in local variable
         InsnList prologue = generatePrologue(className, mn.name, Type.getMethodType(mn.desc), isStatic, dataPointVarIndex);
-        mn.instructions.insert(scopeStart, prologue);
+        mn.instructions.insert(prologue);
 
         // Update each exit point to log results
         mn.instructions.forEach((node) -> {
@@ -55,8 +45,6 @@ public class MethodStabilityTransformer {
                 mn.instructions.insertBefore(node, generateThrowEpilogue(dataPointVarIndex));
             }
         });
-
-        mn.accept(lvs);
 
         return mn;
     }
