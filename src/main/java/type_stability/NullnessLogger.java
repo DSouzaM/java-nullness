@@ -1,20 +1,19 @@
 package type_stability;
 
-import java.io.BufferedWriter;
-import java.io.FileWriter;
-import java.io.IOException;
-import java.io.Writer;
+import java.io.*;
+import java.util.logging.Logger;
 
 
 public class NullnessLogger {
+    private static final Logger LOGGER = Logger.getLogger(NullnessLogger.class.getName());
+
     public static NullnessLogger instance = null;
-    private static String DEFAULT_LOGFILE = "nullness.csv";
 
     public static void initialize(String outputFile) throws IOException {
         if (instance != null) {
             throw new RuntimeException(NullnessLogger.class.getName() + " was initialized twice.");
         }
-        instance = new NullnessLogger(outputFile == null? DEFAULT_LOGFILE : outputFile);
+        instance = new NullnessLogger(outputFile);
     }
 
     public static void logReturn(NullnessDataPoint pt, Object result) {
@@ -22,7 +21,6 @@ public class NullnessLogger {
     }
 
     public static void logThrow(NullnessDataPoint pt) {
-        System.out.println("something thrown");
         instance.log(pt, THROW);
     }
 
@@ -36,8 +34,11 @@ public class NullnessLogger {
 
     private NullnessLogger(String outputFile) throws IOException {
         this.outputFile = outputFile;
-        this.outputWriter = new BufferedWriter(new FileWriter(outputFile));
-
+        if (outputFile == null) {
+            this.outputWriter = new BufferedWriter(new OutputStreamWriter(System.out));
+        } else {
+            this.outputWriter = new BufferedWriter(new FileWriter(outputFile));
+        }
         Runtime.getRuntime().addShutdownHook(getCleanupThread());
     }
 
@@ -61,10 +62,15 @@ public class NullnessLogger {
     private Thread getCleanupThread() {
         return new Thread(() -> {
             try {
-                outputWriter.close();
+                if (outputFile == null) {
+                    // Don't close stdout!
+                    outputWriter.flush();
+                } else {
+                    outputWriter.close();
+                }
             } catch (IOException e) {
-                System.err.println("An exception occurred while closing the NullnessLogger file " + outputFile);
-                e.printStackTrace(System.err);
+                LOGGER.severe("An exception occurred while closing the NullnessLogger file " + outputFile);
+                LOGGER.severe(e.getMessage());
             }
         });
     }

@@ -7,11 +7,14 @@ import org.objectweb.asm.commons.*;
 
 import java.lang.reflect.Constructor;
 import java.util.Arrays;
+import java.util.logging.Logger;
 import java.util.stream.Collectors;
 
 public class MethodStabilityTransformer {
+    private final static Logger LOGGER = Logger.getLogger(MethodStabilityTransformer.class.getName());
+
     public ClassNode transformClass(ClassNode cn) {
-        System.out.println("Transforming " + cn.name);
+        LOGGER.info("Transforming " + cn.name);
         cn.methods = cn.methods.stream()
                 .map(mn -> transformMethod(mn, cn.name))
                 .collect(Collectors.toList());
@@ -22,6 +25,9 @@ public class MethodStabilityTransformer {
         if (!isSuitableMethod(mn)) {
             return mn;
         }
+        LOGGER.info("Transforming " + mn.name + " with descriptor " + mn.desc + ".");
+        boolean isStatic = (mn.access & Opcodes.ACC_STATIC) != 0;
+
 
         // Create a local variable to store parameter data until method exit
         LocalVariablesSorter lvs = new LocalVariablesSorter(mn.access, mn.desc, null);
@@ -38,7 +44,7 @@ public class MethodStabilityTransformer {
         mn.instructions.add(scopeEnd);
 
         // Store parameters' nullness information in local variable
-        InsnList prologue = generatePrologue(className, mn.name, Type.getMethodType(mn.desc), dataPointVarIndex);
+        InsnList prologue = generatePrologue(className, mn.name, Type.getMethodType(mn.desc), isStatic, dataPointVarIndex);
         mn.instructions.insert(scopeStart, prologue);
 
         // Update each exit point to log results
@@ -74,7 +80,7 @@ public class MethodStabilityTransformer {
     }
 
     // Create a type_stability.NullnessDataPoint and store it in the variable at index dataPointVarIndex
-    InsnList generatePrologue(String className, String methodName, Type methodType, int dataPointVarIndex) {
+    InsnList generatePrologue(String className, String methodName, Type methodType, boolean isStatic, int dataPointVarIndex) {
         Constructor<?> ctor = NullnessDataPoint.class.getConstructors()[0]; // Assumption: only one constructor
         Type dataPointType = Type.getType(NullnessDataPoint.class);
         Type[] argumentTypes = methodType.getArgumentTypes();
@@ -93,18 +99,17 @@ public class MethodStabilityTransformer {
         prologue.add(new LdcInsnNode(numRefTypeParameters));
         prologue.add(new TypeInsnNode(Opcodes.ANEWARRAY, Type.getInternalName(Object.class)));
         //  step 2: populate array with all of the ref-type parameters
+        int localVarIdx = isStatic ? 0 : Type.getType(Object.class).getSize();
         int refTypeArrayIdx = 0;
-        int localVarIdx = 0;
         for (Type t : argumentTypes) {
+            if (isNullable(t)) {
+                prologue.add(new InsnNode(Opcodes.DUP));
+                prologue.add(new LdcInsnNode(refTypeArrayIdx));
+                prologue.add(new VarInsnNode(Opcodes.ALOAD, localVarIdx));
+                prologue.add(new InsnNode(Opcodes.AASTORE));
+                refTypeArrayIdx++;
+            }
             localVarIdx += t.getSize(); // longs and doubles consume two "slots" in the local variables
-            if (!isNullable(t)) continue;
-
-            prologue.add(new InsnNode(Opcodes.DUP));
-            prologue.add(new LdcInsnNode(refTypeArrayIdx));
-            prologue.add(new VarInsnNode(Opcodes.ALOAD, localVarIdx));
-            prologue.add(new InsnNode(Opcodes.AASTORE));
-
-            refTypeArrayIdx++;
         }
 
         // Constructor call

@@ -7,7 +7,7 @@ import org.objectweb.asm.tree.ClassNode;
 import java.io.IOException;
 import java.lang.instrument.*;
 import java.security.ProtectionDomain;
-
+import java.util.logging.Logger;
 
 public class TypeStabilityAgent {
     public static void premain(String agentArgs, Instrumentation inst) throws IOException {
@@ -28,6 +28,8 @@ public class TypeStabilityAgent {
 }
 
 class TypeStabilityTransformer implements ClassFileTransformer {
+    private final static Logger LOGGER = Logger.getLogger(TypeStabilityTransformer.class.getName());
+
     String prefix;
 
     TypeStabilityTransformer(String prefix) {
@@ -39,6 +41,7 @@ class TypeStabilityTransformer implements ClassFileTransformer {
         if (!className.startsWith(this.prefix)) {
             return null;
         }
+        LOGGER.info("Found transform candidate " + className + ".");
 
         // Read the byte representation into a ClassNode
         ClassReader cr = new ClassReader(classfileBuffer);

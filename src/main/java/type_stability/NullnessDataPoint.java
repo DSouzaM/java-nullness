@@ -1,6 +1,10 @@
 package type_stability;
 
+import java.util.logging.Logger;
+
 public class NullnessDataPoint {
+    private final static Logger LOGGER = Logger.getLogger(NullnessLogger.class.getName());
+
     String className;
     String methodName;
     byte numParameters;
@@ -8,12 +12,11 @@ public class NullnessDataPoint {
 
 
     public NullnessDataPoint(String className, String methodName, Object[] parameters) {
-//        System.out.println("type_stability.NullnessDataPoint constructor called with " + parameters.length + " parameters");
         this.className = className;
         this.methodName = methodName;
 
         if (parameters.length > 64) {
-            System.err.println("Found a method " + className + "::" + methodName +
+            LOGGER.severe("Found a method " + className + "::" + methodName +
                     " with more than 64 reftype parameters. This is unsupported.");
             System.exit(1);
         }

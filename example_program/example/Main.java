@@ -10,6 +10,8 @@ public class Main {
         } catch (RuntimeException re) {}
         String s = m.buz("blah", 4.2d, "");
         m.method(3);
+        quz("what");
+        quz(null);
         System.out.println("Done!");
     }
 
@@ -27,6 +29,10 @@ public class Main {
 
     String buz(String x, double z, String y) {
         return x;
+    }
+
+    static String quz(String y) {
+        return y;
     }
 
     String method(int y) {
