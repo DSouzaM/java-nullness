@@ -31,8 +31,8 @@ class Config {
 
     static Config parse(String args) {
         Config result = new Config();
-        if (args == null) {
-            return result;
+        if (args == null || args.isEmpty()) {
+            throw new IllegalArgumentException("Agent arguments cannot be empty. Usage: -p packagePrefix [-l logFile] [-d dumpDirectory]");
         }
 
         String[] tokens = args.split(" ");
@@ -54,6 +54,9 @@ class Config {
                 default:
                     throw new IllegalArgumentException("Invalid agent argument: " + tokens[i]);
             }
+        }
+        if (result.prefix == null) {
+            throw new IllegalArgumentException("Package prefix required in agent arguments.");
         }
         return result;
     }
