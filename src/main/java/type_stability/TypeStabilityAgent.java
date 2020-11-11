@@ -3,27 +3,59 @@ package type_stability;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.tree.ClassNode;
+import org.objectweb.asm.util.CheckClassAdapter;
 
+import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.lang.instrument.*;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.security.ProtectionDomain;
 import java.util.logging.Logger;
 
+
 public class TypeStabilityAgent {
     public static void premain(String agentArgs, Instrumentation inst) throws IOException {
-        String prefix = null;
-        String logFile = null;
-        if (agentArgs != null) {
-            String[] args = agentArgs.split(" ");
-            if (args.length > 2) {
-                throw new IllegalArgumentException(
-                        "Agent expects at most two arguments: the package prefix to instrument and a log file name.");
-            }
-            prefix = args.length > 0 ? args[0] : null;
-            logFile = args.length == 2 ? args[1] : null;
+        Config conf = Config.parse(agentArgs);
+        NullnessLogger.initialize(conf.logFile);
+        inst.addTransformer(new TypeStabilityTransformer(conf));
+    }
+}
+
+class Config {
+    String prefix;
+    String logFile;
+    String dumpDirectory;
+
+    static Config parse(String args) {
+        Config result = new Config();
+        if (args == null) {
+            return result;
         }
-        NullnessLogger.initialize(logFile);
-        inst.addTransformer(new TypeStabilityTransformer(prefix));
+
+        String[] tokens = args.split(" ");
+        if (tokens.length % 2 != 0) {
+            throw new IllegalArgumentException("Invalid agent argument string: " + args);
+        }
+        for (int i = 0; i < tokens.length; i += 2) {
+            String value = tokens[i+1];
+            switch(tokens[i]) {
+                case "-p":
+                    result.prefix = value;
+                    break;
+                case "-l":
+                    result.logFile = value;
+                    break;
+                case "-d":
+                    result.dumpDirectory = value;
+                    break;
+                default:
+                    throw new IllegalArgumentException("Invalid agent argument: " + tokens[i]);
+            }
+        }
+        return result;
     }
 }
 
@@ -31,9 +63,11 @@ class TypeStabilityTransformer implements ClassFileTransformer {
     private final static Logger LOGGER = Logger.getLogger(TypeStabilityTransformer.class.getName());
 
     String prefix;
+    String dumpDirectory;
 
-    TypeStabilityTransformer(String prefix) {
-        this.prefix = prefix;
+    TypeStabilityTransformer(Config conf) {
+        this.prefix = conf.prefix;
+        this.dumpDirectory = conf.dumpDirectory;
     }
 
     public byte[] transform(ClassLoader loader, String className, Class<?> classBeingRedefined,
@@ -54,8 +88,33 @@ class TypeStabilityTransformer implements ClassFileTransformer {
         MethodStabilityTransformer m = new MethodStabilityTransformer();
         cn = m.transformClass(cn);
 
-        // Write the ClassNode back to bytes
+        // Write the ClassNode back to bytes. We run the checker *after* this step, because the ClassWriter fixes up
+        // stack size and frames, which is necessary for dataflow checks.
         cn.accept(cw);
-        return cw.toByteArray();
+        byte[] result = cw.toByteArray();
+        try {
+            CheckClassAdapter checker = new CheckClassAdapter(null);
+            cr = new ClassReader(result);
+            cn = new ClassNode();
+            cr.accept(cn, 0);
+            cn.accept(checker);
+        } catch (Exception e) {
+            LOGGER.severe("Invalid bytecode generated for " + className + ":");
+            LOGGER.severe(e.getMessage());
+            throw e;
+        }
+        LOGGER.info("Successfully transformed " + className + ".");
+
+        if (dumpDirectory != null) {
+            Path path = Paths.get(dumpDirectory, className + ".class");
+            LOGGER.info("Dumping results to " + path.toString() + ".");
+            try {
+                Files.createDirectories(path.getParent());
+                Files.write(path, result);
+            } catch (IOException e) {
+                LOGGER.severe("Exception while dumping " + className + " to file.");
+            }
+        }
+        return result;
     }
 }
