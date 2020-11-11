@@ -92,6 +92,19 @@ class TypeStabilityTransformer implements ClassFileTransformer {
         // stack size and frames, which is necessary for dataflow checks.
         cn.accept(cw);
         byte[] result = cw.toByteArray();
+
+        if (dumpDirectory != null) {
+            Path path = Paths.get(dumpDirectory, className + ".class");
+            LOGGER.info("Dumping results to " + path.toString() + ".");
+            try {
+                Files.createDirectories(path.getParent());
+                Files.write(path, result);
+            } catch (IOException e) {
+                LOGGER.severe("Exception while dumping " + className + " to file.");
+            }
+        }
+
+        LOGGER.info("Validating " + className + ".");
         try {
             CheckClassAdapter checker = new CheckClassAdapter(null);
             cr = new ClassReader(result);
@@ -105,16 +118,6 @@ class TypeStabilityTransformer implements ClassFileTransformer {
         }
         LOGGER.info("Successfully transformed " + className + ".");
 
-        if (dumpDirectory != null) {
-            Path path = Paths.get(dumpDirectory, className + ".class");
-            LOGGER.info("Dumping results to " + path.toString() + ".");
-            try {
-                Files.createDirectories(path.getParent());
-                Files.write(path, result);
-            } catch (IOException e) {
-                LOGGER.severe("Exception while dumping " + className + " to file.");
-            }
-        }
         return result;
     }
 }
