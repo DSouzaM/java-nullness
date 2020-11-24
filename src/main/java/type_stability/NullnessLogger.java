@@ -42,7 +42,7 @@ public class NullnessLogger {
         Runtime.getRuntime().addShutdownHook(getCleanupThread());
     }
 
-    private void log(NullnessDataPoint pt, char result) {
+    private synchronized void log(NullnessDataPoint pt, char result) {
         try {
             outputWriter.append(pt.className);
             outputWriter.append(',');
