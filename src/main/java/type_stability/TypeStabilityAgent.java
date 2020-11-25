@@ -5,8 +5,6 @@ import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.util.CheckClassAdapter;
 
-import java.io.File;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.lang.instrument.*;
 import java.nio.file.Files;
@@ -17,9 +15,10 @@ import java.util.logging.Logger;
 
 
 public class TypeStabilityAgent {
-    public static void premain(String agentArgs, Instrumentation inst) throws IOException {
+    public static void premain(String agentArgs, Instrumentation inst) throws Exception {
         Config conf = Config.parse(agentArgs);
-        NullnessLogger.initialize(conf.logFile);
+        // Initialize whichever kind of logger it is.
+        NullnessLogger.initialize(conf.loggerClass, conf.logFile);
         inst.addTransformer(new TypeStabilityTransformer(conf));
     }
 }
@@ -28,28 +27,30 @@ class Config {
     String prefix;
     String logFile;
     String dumpDirectory;
+    Class<? extends NullnessLogger> loggerClass;
 
     static Config parse(String args) {
         Config result = new Config();
+        result.loggerClass = NullnessLogger.class;
+
         if (args == null || args.isEmpty()) {
-            throw new IllegalArgumentException("Agent arguments cannot be empty. Usage: -p packagePrefix [-l logFile] [-d dumpDirectory]");
+            throw new IllegalArgumentException("Agent arguments cannot be empty. Usage: -p packagePrefix [-l logFile] [-d dumpDirectory] [--aggregate]");
         }
 
         String[] tokens = args.split(" ");
-        if (tokens.length % 2 != 0) {
-            throw new IllegalArgumentException("Invalid agent argument string: " + args);
-        }
-        for (int i = 0; i < tokens.length; i += 2) {
-            String value = tokens[i+1];
+        for (int i = 0; i < tokens.length; i += 1) {
             switch(tokens[i]) {
                 case "-p":
-                    result.prefix = value;
+                    result.prefix = tokens[++i];
                     break;
                 case "-l":
-                    result.logFile = value;
+                    result.logFile = tokens[++i];
                     break;
                 case "-d":
-                    result.dumpDirectory = value;
+                    result.dumpDirectory = tokens[++i];
+                    break;
+                case "--aggregate":
+                    result.loggerClass = NullnessAggregateLogger.class;
                     break;
                 default:
                     throw new IllegalArgumentException("Invalid agent argument: " + tokens[i]);
@@ -66,10 +67,12 @@ class TypeStabilityTransformer implements ClassFileTransformer {
     private final static Logger LOGGER = Logger.getLogger(TypeStabilityTransformer.class.getName());
 
     String prefix;
+    Class<? extends NullnessLogger> loggerClass;
     String dumpDirectory;
 
     TypeStabilityTransformer(Config conf) {
         this.prefix = conf.prefix;
+        this.loggerClass = conf.loggerClass;
         this.dumpDirectory = conf.dumpDirectory;
     }
 
@@ -88,7 +91,7 @@ class TypeStabilityTransformer implements ClassFileTransformer {
         ClassWriter cw = new ClassWriter(cr, ClassWriter.COMPUTE_MAXS + ClassWriter.COMPUTE_FRAMES);
 
         // Transform the methods of this class
-        MethodStabilityTransformer m = new MethodStabilityTransformer();
+        MethodStabilityTransformer<? extends NullnessLogger> m = new MethodStabilityTransformer<>(loggerClass);
         cn = m.transformClass(cn);
 
         // Write the ClassNode back to bytes. We run the checker *after* this step, because the ClassWriter fixes up

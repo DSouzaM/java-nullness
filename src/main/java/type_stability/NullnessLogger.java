@@ -1,6 +1,7 @@
 package type_stability;
 
 import java.io.*;
+import java.lang.reflect.Constructor;
 import java.util.logging.Logger;
 
 
@@ -9,11 +10,13 @@ public class NullnessLogger {
 
     public static NullnessLogger instance = null;
 
-    public static void initialize(String outputFile) throws IOException {
+    public static void initialize(Class<? extends NullnessLogger> loggerClass, String outputFile) throws Exception {
         if (instance != null) {
             throw new RuntimeException(NullnessLogger.class.getName() + " was initialized twice.");
         }
-        instance = new NullnessLogger(outputFile);
+        Constructor<? extends NullnessLogger> ctor = loggerClass.getDeclaredConstructor(String.class);
+        ctor.setAccessible(true);
+        instance = ctor.newInstance(outputFile);
     }
 
     public static void logReturn(NullnessDataPoint pt, Object result) {
@@ -25,14 +28,14 @@ public class NullnessLogger {
     }
 
 
-    private static final char NULL = '0';
-    private static final char NONNULL = '1';
-    private static final char THROW = '2';
+    protected static final char NULL = '0';
+    protected static final char NONNULL = '1';
+    protected static final char THROW = '2';
 
-    private final String outputFile;
-    private final Writer outputWriter;
+    protected final String outputFile;
+    protected final Writer outputWriter;
 
-    private NullnessLogger(String outputFile) throws IOException {
+    protected NullnessLogger(String outputFile) throws IOException {
         this.outputFile = outputFile;
         if (outputFile == null) {
             this.outputWriter = new BufferedWriter(new OutputStreamWriter(System.out));
@@ -42,7 +45,7 @@ public class NullnessLogger {
         Runtime.getRuntime().addShutdownHook(getCleanupThread());
     }
 
-    private synchronized void log(NullnessDataPoint pt, char result) {
+    protected synchronized void log(NullnessDataPoint pt, char result) {
         try {
             outputWriter.append(pt.className);
             outputWriter.append(',');
@@ -59,20 +62,22 @@ public class NullnessLogger {
         }
     }
 
-    private Thread getCleanupThread() {
-        return new Thread(() -> {
-            try {
-                if (outputFile == null) {
-                    // Don't close stdout!
-                    outputWriter.flush();
-                } else {
-                    outputWriter.close();
-                }
-            } catch (IOException e) {
-                LOGGER.severe("An exception occurred while closing the NullnessLogger file " + outputFile);
-                LOGGER.severe(e.getMessage());
+    protected void finish() {
+        try {
+            if (outputFile == null) {
+                // Don't close stdout!
+                outputWriter.flush();
+            } else {
+                outputWriter.close();
             }
-        });
+        } catch (IOException e) {
+            LOGGER.severe("An exception occurred while closing the NullnessLogger file " + outputFile);
+            LOGGER.severe(e.getMessage());
+        }
+    }
+
+    protected Thread getCleanupThread() {
+        return new Thread(this::finish);
     }
 
 

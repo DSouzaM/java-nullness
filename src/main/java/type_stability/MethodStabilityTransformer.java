@@ -9,8 +9,14 @@ import java.util.Arrays;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
 
-public class MethodStabilityTransformer {
+public class MethodStabilityTransformer<T extends NullnessLogger> {
     private final static Logger LOGGER = Logger.getLogger(MethodStabilityTransformer.class.getName());
+
+    private final Class<T> loggerClass;
+
+    public MethodStabilityTransformer(Class<T> loggerClass) {
+        this.loggerClass = loggerClass;
+    }
 
     public ClassNode transformClass(ClassNode cn) {
         LOGGER.info("Transforming " + cn.name);
@@ -120,7 +126,7 @@ public class MethodStabilityTransformer {
         epilogue.add(new InsnNode(Opcodes.SWAP)); // rv -> datapoint -> rv
         epilogue.add(new MethodInsnNode(
                 Opcodes.INVOKESTATIC,
-                Type.getInternalName(NullnessLogger.class),
+                Type.getInternalName(loggerClass),
                 "logReturn",
                 Type.getMethodDescriptor(Type.VOID_TYPE, Type.getType(NullnessDataPoint.class), Type.getType(Object.class)),
                 false
@@ -133,7 +139,7 @@ public class MethodStabilityTransformer {
         epilogue.add(new VarInsnNode(Opcodes.ALOAD, dataPointVarIndex)); // exn -> datapoint
         epilogue.add(new MethodInsnNode(
                 Opcodes.INVOKESTATIC,
-                Type.getInternalName(NullnessLogger.class),
+                Type.getInternalName(loggerClass),
                 "logThrow",
                 Type.getMethodDescriptor(Type.VOID_TYPE, Type.getType(NullnessDataPoint.class)),
                 false
