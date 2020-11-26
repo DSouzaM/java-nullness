@@ -11,6 +11,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.security.ProtectionDomain;
+import java.util.logging.Handler;
+import java.util.logging.Level;
+import java.util.logging.LogManager;
 import java.util.logging.Logger;
 
 
@@ -29,9 +32,18 @@ class Config {
     String dumpDirectory;
     Class<? extends NullnessLogger> loggerClass;
 
+    static void setLogLevel(Level level) {
+        Logger rootLogger = LogManager.getLogManager().getLogger("");
+        rootLogger.setLevel(level);
+        for (Handler h : rootLogger.getHandlers()) {
+            h.setLevel(level);
+        }
+    }
+
     static Config parse(String args) {
         Config result = new Config();
         result.loggerClass = NullnessLogger.class;
+        setLogLevel(Level.WARNING);
 
         if (args == null || args.isEmpty()) {
             throw new IllegalArgumentException("Agent arguments cannot be empty. Usage: -p packagePrefix [-l logFile] [-d dumpDirectory] [--aggregate]");
@@ -48,6 +60,9 @@ class Config {
                     break;
                 case "-d":
                     result.dumpDirectory = tokens[++i];
+                    break;
+                case "-v":
+                    setLogLevel(Level.INFO);
                     break;
                 case "--aggregate":
                     result.loggerClass = NullnessAggregateLogger.class;
@@ -88,16 +103,27 @@ class TypeStabilityTransformer implements ClassFileTransformer {
         ClassNode cn = new ClassNode();
         cr.accept(cn, ClassReader.EXPAND_FRAMES);
 
-        ClassWriter cw = new ClassWriter(cr, ClassWriter.COMPUTE_MAXS + ClassWriter.COMPUTE_FRAMES);
+        // TODO: It looks like COMPUTE_FRAMES is necessary for Java 1.7 and onward, because the JVM expects stack frame
+        //  maps. However, somewhere in the call stack this causes asm to load classes, which it sometimes fails to do.
+        //  Apparently you can override ClassWriter.getCommonSuperClass for this scenario but it's unclear what is
+        //  causing only certain classes to fail (i.e., it's not just classes that are currently being loaded that fail).
+        //  link: https://gitlab.ow2.org/asm/asm/-/issues/317918
+        ClassWriter cw = new ClassWriter(cr, ClassWriter.COMPUTE_FRAMES);
 
         // Transform the methods of this class
+        byte[] result;
         MethodStabilityTransformer<? extends NullnessLogger> m = new MethodStabilityTransformer<>(loggerClass);
-        cn = m.transformClass(cn);
+        try {
+            cn = m.transformClass(cn);
 
-        // Write the ClassNode back to bytes. We run the checker *after* this step, because the ClassWriter fixes up
-        // stack size and frames, which is necessary for dataflow checks.
-        cn.accept(cw);
-        byte[] result = cw.toByteArray();
+            // Write the ClassNode back to bytes. We run the checker *after* this step, because the ClassWriter fixes up
+            // stack size and frames, which is necessary for dataflow checks.
+            cn.accept(cw);
+            result = cw.toByteArray();
+        } catch (Exception e) {
+            LOGGER.log(Level.SEVERE, "Exception occurred while transforming " + cn.name + ":", e);
+            throw e;
+        }
 
         if (dumpDirectory != null) {
             Path path = Paths.get(dumpDirectory, className + ".class");

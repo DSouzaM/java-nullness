@@ -5,6 +5,7 @@ import org.objectweb.asm.Type;
 import org.objectweb.asm.tree.*;
 
 import java.lang.reflect.Constructor;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
@@ -21,12 +22,12 @@ public class MethodStabilityTransformer<T extends NullnessLogger> {
     public ClassNode transformClass(ClassNode cn) {
         LOGGER.info("Transforming " + cn.name);
         cn.methods = cn.methods.stream()
-                .map(mn -> transformMethod(mn, cn.name))
+                .map(mn -> transformMethod(cn, mn))
                 .collect(Collectors.toList());
         return cn;
     }
 
-    public MethodNode transformMethod(MethodNode mn, String className) {
+    public MethodNode transformMethod(ClassNode cn, MethodNode mn) {
         if (!isSuitableMethod(mn)) {
             return mn;
         }
@@ -40,7 +41,7 @@ public class MethodStabilityTransformer<T extends NullnessLogger> {
         mn.maxLocals += varType.getSize();
 
         // Store parameters' nullness information in local variable
-        InsnList prologue = generatePrologue(className, mn.name, Type.getMethodType(mn.desc), isStatic, dataPointVarIndex);
+        InsnList prologue = generatePrologue(cn, mn, Type.getMethodType(mn.desc), isStatic, dataPointVarIndex);
         mn.instructions.insert(prologue);
 
         // Update each exit point to log results
@@ -59,6 +60,10 @@ public class MethodStabilityTransformer<T extends NullnessLogger> {
         return t.getSort() == Type.ARRAY || t.getSort() == Type.OBJECT;
     }
 
+    boolean isNullable(String desc) {
+        return desc.startsWith("L") || desc.startsWith("[");
+    }
+
     boolean isSuitableMethod(MethodNode mn) {
         // Can't analyze null-stability of a constructor
         if (mn.name.equals("<init>")) {
@@ -73,38 +78,63 @@ public class MethodStabilityTransformer<T extends NullnessLogger> {
         return Arrays.stream(methodType.getArgumentTypes()).anyMatch(this::isNullable);
     }
 
+    InsnList generateObjectArray(ArrayList<InsnList> values) {
+        InsnList result = new InsnList();
+        // step 1: allocate array
+        result.add(new LdcInsnNode(values.size()));
+        result.add(new TypeInsnNode(Opcodes.ANEWARRAY, Type.getInternalName(Object.class)));
+        // step 2: populate array
+        for (int i = 0; i < values.size(); i++) {
+            result.add(new InsnNode(Opcodes.DUP));
+            result.add(new LdcInsnNode(i));
+            result.add(values.get(i));
+            result.add(new InsnNode(Opcodes.AASTORE));
+        }
+        return result;
+    }
+
     // Create a type_stability.NullnessDataPoint and store it in the variable at index dataPointVarIndex
-    InsnList generatePrologue(String className, String methodName, Type methodType, boolean isStatic, int dataPointVarIndex) {
+    InsnList generatePrologue(ClassNode cn, MethodNode mn, Type methodType, boolean isStatic, int dataPointVarIndex) {
         Constructor<?> ctor = NullnessDataPoint.class.getConstructors()[0]; // Assumption: only one constructor
         Type dataPointType = Type.getType(NullnessDataPoint.class);
         Type[] argumentTypes = methodType.getArgumentTypes();
-        int numRefTypeParameters = (int) Arrays.stream(argumentTypes).filter(this::isNullable).count();
-
         InsnList prologue = new InsnList();
 
-        prologue.add(new TypeInsnNode(Opcodes.NEW, dataPointType.getInternalName()));   // allocate object
+        // Allocate object
+        prologue.add(new TypeInsnNode(Opcodes.NEW, dataPointType.getInternalName()));
 
         // Set up constructor call
         prologue.add(new InsnNode(Opcodes.DUP)); // push object ref
-        prologue.add(new LdcInsnNode(className)); // push className
-        prologue.add(new LdcInsnNode(methodName)); // push methodName
-        // push array
-        //  step 1: allocate array
-        prologue.add(new LdcInsnNode(numRefTypeParameters));
-        prologue.add(new TypeInsnNode(Opcodes.ANEWARRAY, Type.getInternalName(Object.class)));
-        //  step 2: populate array with all of the ref-type parameters
+        prologue.add(new LdcInsnNode(cn.name)); // push className
+        prologue.add(new LdcInsnNode(mn.name)); // push methodName
+
+        // push fields array
+        ArrayList<InsnList> readFields = new ArrayList<>();
+        if ((mn.access & Opcodes.ACC_STATIC) == 0) {
+            for (FieldNode fn : cn.fields) {
+                if ((fn.access & Opcodes.ACC_STATIC) == 0 && isNullable(fn.desc)) {
+                    InsnList list = new InsnList();
+                    list.add(new VarInsnNode(Opcodes.ALOAD, 0));
+                    list.add(new FieldInsnNode(Opcodes.GETFIELD, cn.name, fn.name, fn.desc));
+                    readFields.add(list);
+                }
+            }
+        }
+        prologue.add(generateObjectArray(readFields));
+
+
+        // push parameter array
+        ArrayList<InsnList> readParameters = new ArrayList<>();
         int localVarIdx = isStatic ? 0 : Type.getType(Object.class).getSize();
-        int refTypeArrayIdx = 0;
         for (Type t : argumentTypes) {
             if (isNullable(t)) {
-                prologue.add(new InsnNode(Opcodes.DUP));
-                prologue.add(new LdcInsnNode(refTypeArrayIdx));
-                prologue.add(new VarInsnNode(Opcodes.ALOAD, localVarIdx));
-                prologue.add(new InsnNode(Opcodes.AASTORE));
-                refTypeArrayIdx++;
+                InsnList list = new InsnList();
+                list.add(new VarInsnNode(Opcodes.ALOAD, localVarIdx));
+                readParameters.add(list);
             }
             localVarIdx += t.getSize(); // longs and doubles consume two "slots" in the local variables
         }
+        prologue.add(generateObjectArray(readParameters));
 
         // Constructor call
         prologue.add(new MethodInsnNode(

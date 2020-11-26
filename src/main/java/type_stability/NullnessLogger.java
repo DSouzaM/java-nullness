@@ -45,15 +45,23 @@ public class NullnessLogger {
         Runtime.getRuntime().addShutdownHook(getCleanupThread());
     }
 
+    protected void logBitMap(byte length, long bitmap) throws IOException {
+        long i = 1 << (length - 1);
+        while (i > 0) {
+            outputWriter.append((i & bitmap) != 0 ? '1' : '0');
+            i >>= 1;
+        }
+    }
+
     protected synchronized void log(NullnessDataPoint pt, char result) {
         try {
             outputWriter.append(pt.className);
             outputWriter.append(',');
             outputWriter.append(pt.methodName);
             outputWriter.append(',');
-            outputWriter.append(Integer.toString(pt.numParameters));
+            logBitMap(pt.numFields, pt.fields);
             outputWriter.append(',');
-            outputWriter.append(Long.toBinaryString(pt.parameters));
+            logBitMap(pt.numParameters, pt.parameters);
             outputWriter.append(',');
             outputWriter.append(result);
             outputWriter.append('\n');
