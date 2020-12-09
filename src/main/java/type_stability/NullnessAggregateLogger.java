@@ -51,6 +51,7 @@ public class NullnessAggregateLogger extends NullnessLogger {
     protected NullnessAggregateLogger(String outputFile) throws IOException {
         super(outputFile);
         counts = new HashMap<>();
+        outputWriter.append("fields,params,result,count\n");
     }
 
     @Override
