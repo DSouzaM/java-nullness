@@ -19,14 +19,9 @@ public class NullnessLogger {
         instance = ctor.newInstance(outputFile);
     }
 
-    public static void logReturn(NullnessDataPoint pt, Object result) {
-        instance.log(pt, result == null ? NULL : NONNULL);
+    public static void logPoint(NullnessDataPoint pt) {
+        instance.log(pt);
     }
-
-    public static void logThrow(NullnessDataPoint pt) {
-        instance.log(pt, THROW);
-    }
-
 
     protected static final char NULL = '0';
     protected static final char NONNULL = '1';
@@ -53,17 +48,11 @@ public class NullnessLogger {
         }
     }
 
-    protected synchronized void log(NullnessDataPoint pt, char result) {
+    protected synchronized void log(NullnessDataPoint pt) {
         try {
             outputWriter.append(pt.className);
             outputWriter.append(',');
-            outputWriter.append(pt.methodName);
-            outputWriter.append(',');
-            logBitMap(pt.numFields, pt.fields);
-            outputWriter.append(',');
-            logBitMap(pt.numParameters, pt.parameters);
-            outputWriter.append(',');
-            outputWriter.append(result);
+            logBitMap((byte)pt.fields.length, NullnessDataPoint.nullityBitmap(pt.fields));
             outputWriter.append('\n');
         } catch (IOException e) {
             throw new RuntimeException(e);

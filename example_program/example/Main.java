@@ -2,18 +2,16 @@ package example;
 
 public class Main {
     String name;
+    int blah;
+    String otherString;
 
     public static void main(String[] args) throws Exception {
         Main m = new Main("foo");
         m.bar("a");
-        try {
-            m.bar(null);
-        } catch (RuntimeException re) {}
-        String s = m.buz("blah", 4.2d, "");
-        m.method(3);
-        quz("what");
-        quz(null);
-        System.out.println("Done!");
+        m.baz("shouldn't count");
+        m.bar("");
+        m.otherString = "something";
+        m.bar("blah");
     }
 
     Main(String name) {
@@ -28,15 +26,7 @@ public class Main {
         }
     }
 
-    String buz(String x, double z, String y) {
-        return x;
-    }
-
-    static String quz(String y) {
+    static String baz(String y) {
         return y;
-    }
-
-    String method(int y) {
-       return "";
     }
 }

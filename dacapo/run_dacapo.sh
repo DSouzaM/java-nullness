@@ -12,10 +12,10 @@ fi
 
 declare -A benchmarks
 benchmarks=(
-#  [avrora]="avrora"
-#  [fop]="org/apache/fop"
-#  [h2]="org/h2"
-#  [jython]="org/python"
+  [avrora]="avrora"
+  [fop]="org/apache/fop"
+  [h2]="org/h2"
+  [jython]="org/python"
 )
 
 for TESTNAME PREFIX in "${(@kv)benchmarks}"
