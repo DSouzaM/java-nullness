@@ -81,11 +81,13 @@ public class MethodStabilityTransformer<T extends NullnessLogger> {
         prologue.add(new InsnNode(Opcodes.DUP)); // pt -> pt
         prologue.add(new LdcInsnNode(cn.name)); // pt -> pt -> name
 
-        // push fields array
+        // generate field types and field values arrays
+        ArrayList<String> fieldTypes = new ArrayList<>();
         ArrayList<InsnList> readFields = new ArrayList<>();
         if ((mn.access & Opcodes.ACC_STATIC) == 0) {
             for (FieldNode fn : cn.fields) {
                 if ((fn.access & Opcodes.ACC_STATIC) == 0 && isNullable(fn.desc)) {
+                    fieldTypes.add(fn.desc);
                     InsnList list = new InsnList();
                     list.add(new VarInsnNode(Opcodes.ALOAD, 0));
                     list.add(new FieldInsnNode(Opcodes.GETFIELD, cn.name, fn.name, fn.desc));
@@ -93,7 +95,18 @@ public class MethodStabilityTransformer<T extends NullnessLogger> {
                 }
             }
         }
-        prologue.add(generateObjectArray(readFields)); // pt -> pt -> name -> fields
+
+        InsnList createFieldTypeArray = new InsnList();
+        createFieldTypeArray.add(new LdcInsnNode(fieldTypes.size()));
+        createFieldTypeArray.add(new TypeInsnNode(Opcodes.ANEWARRAY, Type.getInternalName(String.class)));
+        for (int i = 0; i < fieldTypes.size(); i++) {
+            createFieldTypeArray.add(new InsnNode(Opcodes.DUP));
+            createFieldTypeArray.add(new LdcInsnNode(i));
+            createFieldTypeArray.add(new LdcInsnNode(fieldTypes.get(i)));
+            createFieldTypeArray.add(new InsnNode(Opcodes.AASTORE));
+        }
+        prologue.add(createFieldTypeArray); // pt -> pt -> name -> fieldTypes
+        prologue.add(generateObjectArray(readFields)); // pt -> pt -> name -> fieldTypes -> fields
 
         // Constructor call
         prologue.add(new MethodInsnNode(

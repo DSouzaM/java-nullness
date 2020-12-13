@@ -9,12 +9,15 @@ public class NullnessAggregateLogger extends NullnessLogger {
 
     // number of times a class' fields were logged
     private final HashMap<String, Integer> countPerClass;
+    // field descriptors for each class
+    private final HashMap<String, String[]> fieldTypesPerClass;
     // overall counts of non-null fields per class
     private final HashMap<String, int[]> fieldCounts;
 
     protected NullnessAggregateLogger(String outputFile) throws IOException {
         super(outputFile);
         fieldCounts = new HashMap<>();
+        fieldTypesPerClass = new HashMap<>();
         countPerClass = new HashMap<>();
         outputWriter.append("class,field,nonnull_count,total_count,ratio\n");
     }
@@ -24,7 +27,7 @@ public class NullnessAggregateLogger extends NullnessLogger {
         // Increment # times this class was logged
         int timesLogged = countPerClass.getOrDefault(pt.className, 0);
         countPerClass.put(pt.className, timesLogged + 1);
-
+        fieldTypesPerClass.putIfAbsent(pt.className, pt.fieldTypes);
         // Increment per-field nullness
         int[] counts = fieldCounts.computeIfAbsent(pt.className, k -> new int[pt.fields.length]);
         for (int i = 0; i < pt.fields.length; i++) {
@@ -39,11 +42,12 @@ public class NullnessAggregateLogger extends NullnessLogger {
         try {
             for (String className : countPerClass.keySet()) {
                 int timesLogged = countPerClass.get(className);
+                String[] fieldTypes = fieldTypesPerClass.get(className);
                 int[] counts = fieldCounts.get(className);
                 for (int i = 0; i < counts.length; i++) {
-                    outputWriter.append(className);
+                    outputWriter.append(className); // class name
                     outputWriter.append(',');
-                    outputWriter.append(Integer.toString(i)); // field index
+                    outputWriter.append(fieldTypes[i]); // field descriptor
                     outputWriter.append(',');
                     outputWriter.append(Integer.toString(counts[i])); // numerator
                     outputWriter.append(',');
